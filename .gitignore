@@ -1,0 +1,14 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore environment folder
+llm-fe/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore node_modules (if applicable)
+node_modules/

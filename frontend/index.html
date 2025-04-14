@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeGuard AI - Vulnerability Scanner With LLM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href ="style.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-600 p-2 rounded-lg">
+                        <i class="fas fa-shield-alt text-white text-2xl"></i>
+                    </div>
+                    <h1 class="text-2xl font-bold text-gray-800">CodeGuard AI</h1>
+                </div>
+                <div class="flex space-x-4">
+                    <button class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 transition-all">
+                        <i class="fas fa-history mr-2"></i>History
+                    </button>
+                </div>
+            </div>
+            <p class="text-gray-600 mt-2">AI-powered code vulnerability scanner with automatic language detection</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left sidebar - Code input -->
+            <div class="lg:col-span-1 bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-4 bg-gray-800 text-white flex justify-between items-center">
+                    <h2 class="font-semibold">Code Input</h2>
+                    <div class="flex space-x-2">
+                        <button id="clear-code" class="p-1 hover:bg-gray-700 rounded">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        <button id="format-code" class="p-1 hover:bg-gray-700 rounded">
+                            <i class="fas fa-indent"></i>
+                        </button>
+                    </div>
+                </div>
+                <textarea id="code-input" class="w-full h-96 p-4 code-editor bg-gray-900 text-gray-100 focus:outline-none resize-none" placeholder="Paste your code here (language will be auto-detected)..."></textarea>
+                <div class="p-4 bg-gray-50 border-t">
+                    <button id="analyze-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-all flex items-center justify-center">
+                        <i class="fas fa-search mr-2"></i> Analyze Code
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main chat area -->
+            <div class="lg:col-span-2 flex flex-col">
+                <div class="bg-white rounded-xl shadow-md overflow-hidden flex-1 flex flex-col">
+                    <!-- Chat header -->
+                    <div class="p-4 bg-gray-800 text-white">
+                        <h2 class="font-semibold">Security Analysis Chat</h2>
+                    </div>
+                    
+                    <!-- Messages container -->
+                    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+                        <!-- Welcome message -->
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 bg-blue-100 p-2 rounded-full">
+                                <i class="fas fa-shield-alt text-blue-600"></i>
+                            </div>
+                            <div class="ml-3">
+                                <div class="bg-gray-100 p-3 rounded-lg">
+                                    <p class="font-medium text-gray-800">CodeGuard AI</p>
+                                    <p class="text-gray-700 mt-1">Hello! I'm your AI security assistant. Paste your code on the left and I'll automatically detect the language and analyze it for vulnerabilities, security risks, and suggest improvements.</p>
+                                </div>
+                                <div class="mt-2 text-xs text-gray-500">
+                                    <span>Today at <span id="current-time"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Chat input -->
+                    <div class="p-4 border-t bg-gray-50">
+                        <div class="relative">
+                            <textarea id="chat-input" rows="2" class="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ask about security best practices or specific vulnerabilities..."></textarea>
+                            <button id="send-btn" class="absolute right-3 bottom-3 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-gray-500">
+                            <div>
+                                <button class="hover:text-blue-600 mr-2">
+                                    <i class="fas fa-code mr-1"></i> Add code snippet
+                                </button>
+                                <button class="hover:text-blue-600">
+                                    <i class="fas fa-paperclip mr-1"></i> Attach file
+                                </button>
+                            </div>
+                            <div>
+                                <span>Press Shift+Enter for new line</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Analysis results section -->
+                <div id="results-section" class="mt-6 bg-white rounded-xl shadow-md overflow-hidden hidden">
+                    <div class="p-4 bg-gray-800 text-white">
+                        <h2 class="font-semibold">Vulnerability Analysis Results</h2>
+                    </div>
+                    <div class="p-4">
+                        <!-- Severity summary -->
+                        <div class="mb-6">
+                            <h3 class="font-medium text-gray-800 mb-3">Severity Overview</h3>
+                            <div class="grid grid-cols-4 gap-2 text-center">
+                                <div class="bg-red-100 p-3 rounded-lg">
+                                    <div class="text-red-800 font-bold text-xl">0</div>
+                                    <div class="text-xs text-red-600">Critical</div>
+                                </div>
+                                <div class="bg-orange-100 p-3 rounded-lg">
+                                    <div class="text-orange-800 font-bold text-xl">0</div>
+                                    <div class="text-xs text-orange-600">High</div>
+                                </div>
+                                <div class="bg-yellow-100 p-3 rounded-lg">
+                                    <div class="text-yellow-800 font-bold text-xl">0</div>
+                                    <div class="text-xs text-yellow-600">Medium</div>
+                                </div>
+                                <div class="bg-blue-100 p-3 rounded-lg">
+                                    <div class="text-blue-800 font-bold text-xl">0</div>
+                                    <div class="text-xs text-blue-600">Low</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Detailed findings -->
+                        <div>
+                            <h3 class="font-medium text-gray-800 mb-3">Detailed Findings</h3>
+                            <div id="findings-container" class="space-y-3">
+                                <!-- Findings will be added here dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+
+</body>
+</html>
