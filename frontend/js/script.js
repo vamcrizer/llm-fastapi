@@ -122,13 +122,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return responses[Math.floor(Math.random() * responses.length)];
     }
     
-    function analyzeCode() {
+    async function analyzeCode() {
         const code = codeInput.value.trim();
         if (!code) {
             addMessageToChat("Please paste some code in the input area first.", 'ai');
             return;
         }
-        
+    
         // Show analyzing indicator
         const analyzingDiv = document.createElement('div');
         analyzingDiv.className = 'flex items-start';
@@ -157,17 +157,61 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         chatMessages.appendChild(analyzingDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        
+    
         try {
-            const response = await fetch("http:127.0.0.1:8000/generate",{
+            // Call the backend API
+            const response = await fetch("http://127.0.0.1:8000/generate", {
                 method: "POST",
-                headers : {"Content-Type" : "application/json"},
-                body: JSON.stringify({code})
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code })
             });
-        
-        if (!response.ok){
-            throw new Error("Failed to analyze code.");
-        }
+    
+            if (!response.ok) {
+                throw new Error("Failed to analyze code.");
+            }
+    
+            const data = await response.json();
+    
+            // Add analysis complete message
+            addMessageToChat("Analysis complete! Check the results section below for details.", 'ai');
+    
+            // Show results section
+            resultsSection.classList.remove('hidden');
+    
+            // Populate findings
+            findingsContainer.innerHTML = '';
+            data.findings.forEach(finding => {
+                const findingDiv = document.createElement('div');
+                findingDiv.className = 'border border-gray-200 rounded-lg overflow-hidden';
+    
+                let severityColor = 'bg-blue-100 text-blue-800';
+                if (finding.severity === 'high') severityColor = 'bg-orange-100 text-orange-800';
+                if (finding.severity === 'medium') severityColor = 'bg-yellow-100 text-yellow-800';
+                if (finding.severity === 'critical') severityColor = 'bg-red-100 text-red-800';
+    
+                findingDiv.innerHTML = `
+                    <div class="p-3 ${severityColor} flex justify-between items-center">
+                        <h4 class="font-medium">${finding.title}</h4>
+                        <span class="text-xs px-2 py-1 ${severityColor.replace('100', '200')} rounded-full capitalize">${finding.severity}</span>
+                    </div>
+                    <div class="p-4">
+                        <div class="mb-3">
+                            <p class="text-sm text-gray-700">${finding.description}</p>
+                            <p class="text-xs text-gray-500 mt-1">Location: ${finding.location}</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="text-xs font-medium text-gray-800 mb-1">Recommendation:</p>
+                            <p class="text-sm text-gray-700">${finding.recommendation}</p>
+                        </div>
+                    </div>
+                `;
+    
+                findingsContainer.appendChild(findingDiv);
+            });
+        } catch (error) {
+            addMessageToChat("Failed to analyze code. Please try again later.", 'ai');
+        } finally {
+            chatMessages.removeChild(analyzingDiv);
         }
         // Simulate analysis after delay
         setTimeout(() => {
@@ -180,7 +224,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Generate mock findings
             generateMockFindings();
         }, 2500);
+        
     }
+
     
     function generateMockFindings() {
         findingsContainer.innerHTML = '';
