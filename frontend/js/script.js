@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
     
-        // Show analyzing indicator
+        // Show analyzing indicator with a spinning animation
         const analyzingDiv = document.createElement('div');
         analyzingDiv.className = 'flex items-start';
         analyzingDiv.innerHTML = `
@@ -139,17 +139,34 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="ml-3">
                 <div class="bg-gray-100 p-3 rounded-lg">
                     <p class="font-medium text-gray-800">CodeGuard AI</p>
-                    <div class="mt-1">
-                        <div class="flex items-center">
-                            <span class="text-gray-700 mr-2">Analyzing code</span>
-                            <div class="relative w-64 h-3 bg-gray-200 rounded-full overflow-hidden">
-                                <div class="absolute top-0 left-0 h-full bg-blue-500 animate-analyzing"></div>
+                    <div class="mt-2">
+                        <div class="flex items-center justify-center">
+                            <div class="relative w-32 h-32">
+                                <!-- Spinning outer circle -->
+                                <div class="absolute top-0 left-0 w-full h-full border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                                
+                                <!-- Center content -->
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="text-sm font-medium text-blue-600">Analyzing</div>
+                                        <div class="text-xs text-gray-500" id="analyze-status">Detecting language...</div>
+                                    </div>
+                                </div>
+    
+                                <!-- Small security icons positioned around the circle -->
+                                <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-1 rounded-full">
+                                    <i class="fas fa-code text-gray-600 text-xs"></i>
+                                </div>
+                                <div class="absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2 bg-white p-1 rounded-full">
+                                    <i class="fas fa-search text-gray-600 text-xs"></i>
+                                </div>
+                                <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 bg-white p-1 rounded-full">
+                                    <i class="fas fa-bug text-gray-600 text-xs"></i>
+                                </div>
+                                <div class="absolute top-1/2 left-0 transform -translate-x-1/2 -translate-y-1/2 bg-white p-1 rounded-full">
+                                    <i class="fas fa-shield-alt text-gray-600 text-xs"></i>
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex justify-between mt-1">
-                            <span class="text-xs text-gray-500">Language detection</span>
-                            <span class="text-xs text-gray-500">Vulnerability scan</span>
-                            <span class="text-xs text-gray-500">Report</span>
                         </div>
                     </div>
                 </div>
@@ -157,6 +174,22 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         chatMessages.appendChild(analyzingDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // Animation to update status text
+        const statusElement = analyzingDiv.querySelector('#analyze-status');
+        const statusMessages = [
+            "Detecting language...",
+            "Parsing code structure...",
+            "Analyzing security patterns...",
+            "Checking for vulnerabilities...",
+            "Generating recommendations..."
+        ];
+        
+        let statusIndex = 0;
+        const statusInterval = setInterval(() => {
+            statusIndex = (statusIndex + 1) % statusMessages.length;
+            statusElement.textContent = statusMessages[statusIndex];
+        }, 1500);
     
         try {
             // Call the backend API
@@ -171,6 +204,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
     
             const data = await response.json();
+            
+            // Clear the status update interval
+            clearInterval(statusInterval);
     
             // Add analysis complete message
             addMessageToChat("Analysis complete! Check the results section below for details.", 'ai');
@@ -178,11 +214,25 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show results section
             resultsSection.classList.remove('hidden');
     
+            // Count severity levels
+            const severityCounts = {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0
+            };
+    
             // Populate findings
             findingsContainer.innerHTML = '';
             data.findings.forEach(finding => {
+                // Increment severity counter
+                const severity = finding.severity.toLowerCase();
+                if (severityCounts.hasOwnProperty(severity)) {
+                    severityCounts[severity]++;
+                }
+    
                 const findingDiv = document.createElement('div');
-                findingDiv.className = 'border border-gray-200 rounded-lg overflow-hidden';
+                findingDiv.className = 'border border-gray-200 rounded-lg overflow-hidden mb-4';
     
                 let severityColor = 'bg-blue-100 text-blue-800';
                 if (finding.severity === 'high') severityColor = 'bg-orange-100 text-orange-800';
@@ -208,25 +258,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
                 findingsContainer.appendChild(findingDiv);
             });
+    
+            // Update severity counts in UI
+            document.querySelector('.bg-red-100 .text-xl').textContent = severityCounts.critical;
+            document.querySelector('.bg-orange-100 .text-xl').textContent = severityCounts.high;
+            document.querySelector('.bg-yellow-100 .text-xl').textContent = severityCounts.medium;
+            document.querySelector('.bg-blue-100 .text-xl').textContent = severityCounts.low;
+    
         } catch (error) {
             addMessageToChat("Failed to analyze code. Please try again later.", 'ai');
+            console.error("Error:", error);
         } finally {
+            clearInterval(statusInterval);
             chatMessages.removeChild(analyzingDiv);
         }
-        // Simulate analysis after delay
-        setTimeout(() => {
-            // Add analysis complete message
-            addMessageToChat("Analysis complete! I've automatically detected the language and found some security issues in your code. Check the results section below for details.", 'ai');
-            
-            // Show results section
-            resultsSection.classList.remove('hidden');
-            
-            // Generate mock findings
-            generateMockFindings();
-        }, 2500);
-        
     }
-
     
     function generateMockFindings() {
         findingsContainer.innerHTML = '';
