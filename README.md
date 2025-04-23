@@ -63,6 +63,8 @@ fastapi-llm/
     pip install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 -c pytorch -c nvidia
    # CUDA 12.6
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+   # CUDA 12.8
+    pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
    ```
 
 3. Install backend dependencies:
