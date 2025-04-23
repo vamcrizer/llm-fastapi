@@ -1,5 +1,3 @@
-# FastAPI Language Model Interface
-
 ## Overview
 A web application that provides a user-friendly interface for interacting with large language models. This project consists of a FastAPI backend and a simple HTML/CSS/JavaScript frontend.
 
@@ -30,6 +28,13 @@ This project leverages several modern technologies:
 ### Frontend
 - **HTML/CSS/JavaScript**: Vanilla frontend technology stack
 - **Fetch API**: For seamless communication with the backend
+
+Some preview of the website
+
+
+<img width="746" alt="image" src="https://github.com/user-attachments/assets/921aae2a-069d-4adf-82f2-3d686aede92d" />
+<img width="468" alt="image" src="https://github.com/user-attachments/assets/92078193-1fc7-4b1c-af16-938faf270759" />
+
 
 ## Project Structure
 ```
