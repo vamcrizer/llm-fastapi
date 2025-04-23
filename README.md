@@ -108,7 +108,8 @@ No additional setup required for the frontend as it uses vanilla HTML, CSS, and 
 
 2. Start the application:
    ```bash
-   python run.py
+   cd backend/app
+   uvicorn main:app --reload
    ```
 
 3. Open your browser and navigate to:
