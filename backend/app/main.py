@@ -1,137 +1,202 @@
-import ollama
-import json
-import re
-from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import json
+import asyncio
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 
-app = FastAPI()
+# Import LangChain components for conversation management
+from langchain.memory import ConversationBufferMemory
+from langchain.schema import HumanMessage, AIMessage
 
+# Initialize the model and tokenizer
+tokenizer = AutoTokenizer.from_pretrained("vamcrizer/CodeGuard_14B_Vuln_Detection")
+model = AutoModelForCausalLM.from_pretrained("vamcrizer/CodeGuard_14B_Vuln_Detection")
+
+# Move model to GPU if available
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = model.to(device)
+
+# Create FastAPI app
+app = FastAPI(title="CodeGuard Vulnerability Detection API")
+
+# Setup CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # For production, specify actual origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class CodeAnalysisRequest(BaseModel):
+# Conversation memory with LangChain
+memory = ConversationBufferMemory(return_messages=True)
+
+# To store the code being analyzed
+analyzed_code = ""
+
+# Define request and response models
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: Optional[List[Dict[str, str]]] = None
+
+class ChatResponse(BaseModel):
+    response: str
+
+class CodeRequest(BaseModel):
     code: str
 
-def parse_findings(content):
-    """Parse the markdown-formatted content into a structured findings list."""
-    findings = []
-    
-    # Pattern to match issue sections
-    issue_pattern = r"(?:#### Issue \d+:|#### Finding \d+:)\s*([^\n]+)\n([\s\S]+?)(?=#### Issue \d+:|#### Finding \d+:|$)"
-    
-    # Find all issue sections
-    issues = re.finditer(issue_pattern, content)
-    
-    for issue in issues:
-        title = issue.group(1).strip()
-        body = issue.group(2).strip()
-        
-        # Extract data from issue content
-        description = re.search(r"- \*\*Description:\*\* ([\s\S]+?)(?=- \*\*|$)", body)
-        severity = re.search(r"- \*\*Severity:\*\* ([\s\S]+?)(?=- \*\*|$)", body)
-        location = re.search(r"- \*\*Location:\*\* ([\s\S]+?)(?=- \*\*|$)", body)
-        recommendation = re.search(r"- \*\*Recommendation:\*\* ([\s\S]+?)(?=$)", body)
-        
-        finding = {
-            "title": title,
-            "description": description.group(1).strip() if description else "No description provided",
-            "severity": severity.group(1).strip().lower() if severity else "medium",
-            "location": location.group(1).strip() if location else "Unknown",
-            "recommendation": recommendation.group(1).strip() if recommendation else "No recommendation provided"
-        }
-        
-        findings.append(finding)
-    
-    # If no issues were found using the pattern, try to extract directly from markdown
-    if not findings:
-        title_pattern = r"- \*\*Title:\*\* ([^\n]+)"
-        description_pattern = r"- \*\*Description:\*\* ([^\n]+(?:\n(?!- \*\*)[^\n]+)*)"
-        severity_pattern = r"- \*\*Severity:\*\* ([^\n]+)"
-        location_pattern = r"- \*\*Location:\*\* ([^\n]+)"
-        recommendation_pattern = r"- \*\*Recommendation:\*\* ([\s\S]+?)(?=(?:\n\n)|$)"
-        
-        titles = re.finditer(title_pattern, content)
-        descriptions = re.finditer(description_pattern, content)
-        severities = re.finditer(severity_pattern, content)
-        locations = re.finditer(location_pattern, content)
-        recommendations = re.finditer(recommendation_pattern, content)
-        
-        titles_list = [m.group(1).strip() for m in titles]
-        descriptions_list = [m.group(1).strip() for m in descriptions]
-        severities_list = [m.group(1).strip().lower() for m in severities]
-        locations_list = [m.group(1).strip() for m in locations]
-        recommendations_list = [m.group(1).strip() for m in recommendations]
-        
-        # Create findings from the extracted data
-        for i in range(min(len(titles_list), len(descriptions_list), len(severities_list), len(locations_list), len(recommendations_list))):
-            finding = {
-                "title": titles_list[i],
-                "description": descriptions_list[i],
-                "severity": severities_list[i],
-                "location": locations_list[i],
-                "recommendation": recommendations_list[i]
-            }
-            findings.append(finding)
-    
-    # Nếu vẫn không tìm được findings, tạo items giả
-    if not findings:
-        # Trích xuất các tiêu đề có thể tìm được
-        potential_titles = re.finditer(r"(?:^|\n)#+\s+(.+?)(?:\n|$)", content)
-        titles_list = [m.group(1).strip() for m in potential_titles if "summary" not in m.group(1).lower()]
-        
-        for title in titles_list:
-            findings.append({
-                "title": title,
-                "description": "Analysis provided but in non-standard format.",
-                "severity": "medium",
-                "location": "Unknown",
-                "recommendation": "Please check the full analysis for details."
-            })
-    
-    return findings
+class Finding(BaseModel):
+    title: str
+    severity: str
+    description: str
+    location: str
+    recommendation: str
 
-@app.post("/generate")
-async def generate(request: CodeAnalysisRequest):
-    prompt = f"""
-    Analyze the following code for potential security vulnerabilities.
-    Your response MUST follow this exact format for each vulnerability found:
+class CodeResponse(BaseModel):
+    findings: List[Finding]
 
-    #### Issue 1: [Vulnerability Name]
-    - **Title:** [Brief title of the vulnerability]
-    - **Description:** [Detailed explanation of what the vulnerability is and why it's dangerous]
-    - **Severity:** [critical/high/medium/low]
-    - **Location:** [Exact line number or function where the vulnerability exists]
-    - **Recommendation:** [Detailed guidance on how to fix the issue with code examples]
+# Helper to format conversation for the model
+def format_conversation(conversation_history, include_code=True):
+    formatted_prompt = ""
+    
+    # Add analyzed code to context if available and requested
+    if include_code and analyzed_code:
+        formatted_prompt += f"Here is the code being analyzed:\n```\n{analyzed_code}\n```\n\n"
+    
+    # Add conversation history
+    if conversation_history:
+        for message in conversation_history:
+            role = message.get("role", "")
+            content = message.get("content", "")
+            
+            if role == "user":
+                formatted_prompt += f"User: {content}\n"
+            elif role == "assistant":
+                formatted_prompt += f"Assistant: {content}\n"
+    
+    return formatted_prompt
 
-    #### Issue 2: [Next Vulnerability]
-    ...and so on for each vulnerability
+# Generate response using the model
+def generate_response(prompt, max_new_tokens=2048):
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    
+    # Generate response
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs["input_ids"],
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=1,
+            top_p=0.9,
+        )
+    
+    # Decode generated text
+    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    
+    # Extract only the model's response (not the input prompt)
+    response = generated_text[len(prompt):].strip()
+    
+    return response
 
-    You MUST include all five fields (Title, Description, Severity, Location, Recommendation) for each issue found.
-    If you find no vulnerabilities, clearly state that no security issues were found.
-
-    Code to analyze:
+# Analyze code for vulnerabilities
+def analyze_code(code):
+    global analyzed_code
+    analyzed_code = code
+    
+    # Create prompt for vulnerability analysis
+    analysis_prompt = f"""
+    Analyze the following code for security vulnerabilities and provide detailed findings:
+    
     ```
-    {request.code}
+    {code}
     ```
+    
+    Provide your analysis as a JSON array of findings, where each finding contains:
+    - title: A short title for the vulnerability
+    - severity: The severity level (critical, high, medium, low)
+    - description: A detailed description of the vulnerability
+    - location: Where in the code the vulnerability exists
+    - recommendation: How to fix the vulnerability
     """
+    
+    # Generate analysis response
+    analysis_response = generate_response(analysis_prompt)
+    
+    # Try to extract JSON from the response
     try:
-        messages = [
-            {"role": "system", "content": "You are a cybersecurity expert specializing in code analysis. Provide extremely detailed and specific information for each vulnerability. Always include code examples in your recommendations. Never leave any field empty."},
-            {"role": "user", "content": prompt}
-            ]
-
-        response = ollama.chat(model="qwen2.5-coder:3b-instruct-q8_0", messages=messages)
-        content = response["message"]["content"]
+        # Check if we need to parse JSON from the text
+        if "```json" in analysis_response:
+            json_text = analysis_response.split("```json")[1].split("```")[0].strip()
+        elif "```" in analysis_response:
+            json_text = analysis_response.split("```")[1].split("```")[0].strip()
+        else:
+            json_text = analysis_response
         
-        # Parse the content into structured findings
-        findings = parse_findings(content)
+        findings = json.loads(json_text)
         
-        return {"findings": findings}
+        # Ensure we have the right structure
+        if not isinstance(findings, list):
+            findings = []
+            
+        # Ensure each finding has the required fields
+        validated_findings = []
+        for finding in findings:
+            validated_findings.append({
+                "title": finding.get("title", "Unnamed Issue"),
+                "severity": finding.get("severity", "medium").lower(),
+                "description": finding.get("description", "No description provided"),
+                "location": finding.get("location", "Unknown"),
+                "recommendation": finding.get("recommendation", "No recommendation provided")
+            })
+        
+        return validated_findings
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error parsing analysis response: {e}")
+        # Return a default finding if parsing failed
+        return [{
+            "title": "Analysis Error",
+            "severity": "medium",
+            "description": "Failed to parse the analysis results. The model output was not in the expected format.",
+            "location": "N/A",
+            "recommendation": "Please try again with a different code sample or contact support."
+        }]
+
+# Chat endpoint
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    global analyzed_code
+    
+    # Update conversation history in memory
+    conversation_history = request.conversation_history or []
+    
+    # Format the conversation for the model
+    formatted_prompt = format_conversation(conversation_history)
+    
+    # Add the current message
+    current_prompt = f"{formatted_prompt}User: {request.message}\nAssistant:"
+    
+    # Generate response
+    response = generate_response(current_prompt)
+    
+    # Return the response
+    return ChatResponse(response=response)
+
+# Code analysis endpoint
+@app.post("/generate", response_model=CodeResponse)
+async def generate(request: CodeRequest):
+    # Analyze the code
+    findings = analyze_code(request.code)
+    
+    return CodeResponse(findings=findings)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
