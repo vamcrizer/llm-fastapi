@@ -1,7 +1,9 @@
-ollama
 fastapi
 uvicorn
 langchain
 langchain-community
 requests
 python-dotenv
+transformers
+bitsandbytes
+accelerate
