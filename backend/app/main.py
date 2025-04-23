@@ -56,7 +56,7 @@ class Finding(BaseModel):
     recommendation: str
 
 class CodeResponse(BaseModel):
-    findings: List<Finding]
+    findings: List[Finding]
 
 # Helper to format conversation for the model
 def format_conversation(conversation_history, include_code=True):
@@ -80,7 +80,7 @@ def format_conversation(conversation_history, include_code=True):
     return formatted_prompt
 
 # Generate response using the model
-def generate_response(prompt, max_new_tokens=2048):
+def generate_response(prompt, max_new_tokens=512):
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
     
     # Generate response
@@ -89,7 +89,7 @@ def generate_response(prompt, max_new_tokens=2048):
             inputs["input_ids"],
             max_new_tokens=max_new_tokens,
             do_sample=True,
-            temperature=1,
+            temperature=0.7,
             top_p=0.9,
         )
     
@@ -108,8 +108,6 @@ def analyze_code(code):
     
     # Create prompt for vulnerability analysis
     analysis_prompt = f"""
-    You are CodeGuard, an expert code security analyzer with deep knowledge of secure coding practices and vulnerability detection.
-    
     Analyze the following code for security vulnerabilities and provide detailed findings:
     
     ```
@@ -122,8 +120,6 @@ def analyze_code(code):
     - description: A detailed description of the vulnerability
     - location: Where in the code the vulnerability exists
     - recommendation: How to fix the vulnerability
-    
-    Be thorough in your analysis and provide actionable recommendations that follow security best practices.
     """
     
     # Generate analysis response
@@ -179,12 +175,8 @@ async def chat(request: ChatRequest):
     # Format the conversation for the model
     formatted_prompt = format_conversation(conversation_history)
     
-    # Add the current message with a system prompt establishing the model as a security expert
-    current_prompt = f"""You are CodeGuard, an expert code security analyst with deep knowledge of secure coding practices, vulnerability detection, and remediation strategies.
-    
-    Your goal is to help users understand security vulnerabilities in their code and provide clear, actionable advice on how to fix these issues.
-    
-    {formatted_prompt}User: {request.message}\nAssistant:"""
+    # Add the current message
+    current_prompt = f"{formatted_prompt}User: {request.message}\nAssistant:"
     
     # Generate response
     response = generate_response(current_prompt)
