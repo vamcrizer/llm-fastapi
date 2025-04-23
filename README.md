@@ -89,7 +89,7 @@ No additional setup required for the frontend as it uses vanilla HTML, CSS, and 
 
 3. Open your browser and navigate to:
    ```
-   http://localhost:8000
+   frontend/index.html
    ```
 
 ## Features
