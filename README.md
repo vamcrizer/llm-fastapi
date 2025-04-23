@@ -12,6 +12,25 @@ This application uses **CodeGuard_14B_Vuln_Detection**, a specialized model for 
 
 The model is optimized to analyze code snippets, identify potential security issues, and provide detailed recommendations for fixing vulnerabilities with varying severity levels.
 
+> **⚠️ IMPORTANT**: This model requires a GPU with at least 11GB VRAM to function smoothly. Performance may be degraded or the application may fail to start with less VRAM.
+
+## Technologies Used
+
+This project leverages several modern technologies:
+
+### Backend
+- **FastAPI**: High-performance web framework for building APIs
+- **LangChain**: Framework for developing applications powered by language models with:
+  - `ConversationBufferMemory` for maintaining chat history
+  - Support for message formatting and conversation management
+- **Transformers**: Hugging Face library for state-of-the-art NLP models
+- **PyTorch**: Deep learning framework (with CUDA support)
+- **BitsAndBytes**: Library for model quantization (4-bit optimization)
+
+### Frontend
+- **HTML/CSS/JavaScript**: Vanilla frontend technology stack
+- **Fetch API**: For seamless communication with the backend
+
 ## Project Structure
 ```
 fastapi-llm/
