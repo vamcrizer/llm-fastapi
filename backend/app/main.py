@@ -106,20 +106,41 @@ def analyze_code(code):
     global analyzed_code
     analyzed_code = code
     
-    # Create prompt for vulnerability analysis
+    # Create prompt for vulnerability analysis with more explicit formatting instructions
     analysis_prompt = f"""
-    Analyze the following code for security vulnerabilities and provide detailed findings:
+    You are a code security expert. Analyze the following code for security vulnerabilities:
     
     ```
     {code}
     ```
     
-    Provide your analysis as a JSON array of findings, where each finding contains:
-    - title: A short title for the vulnerability
-    - severity: The severity level (critical, high, medium, low)
-    - description: A detailed description of the vulnerability
-    - location: Where in the code the vulnerability exists
-    - recommendation: How to fix the vulnerability
+    IMPORTANT: You must respond ONLY with a valid JSON array of findings, with no additional text before or after.
+    Each finding in the array must have exactly these fields:
+    - "title": A short title for the vulnerability
+    - "severity": One of these values only: "critical", "high", "medium", or "low"
+    - "description": A detailed description of the vulnerability
+    - "location": Where in the code the vulnerability exists
+    - "recommendation": How to fix the vulnerability
+
+    Example of the exact format required:
+    [
+      {{
+        "title": "SQL Injection",
+        "severity": "critical",
+        "description": "The application does not sanitize user input before using it in SQL queries.",
+        "location": "Line 42, function process_user_input()",
+        "recommendation": "Use parameterized queries or prepared statements to prevent SQL injection attacks."
+      }},
+      {{
+        "title": "Another Issue",
+        "severity": "medium",
+        "description": "Description here",
+        "location": "Location information",
+        "recommendation": "Fix recommendation"
+      }}
+    ]
+
+    If no vulnerabilities are found, return an empty array: []
     """
     
     # Generate analysis response
@@ -127,13 +148,20 @@ def analyze_code(code):
     
     # Try to extract JSON from the response
     try:
-        # Check if we need to parse JSON from the text
+        # First attempt to find JSON within markdown code blocks
         if "```json" in analysis_response:
             json_text = analysis_response.split("```json")[1].split("```")[0].strip()
         elif "```" in analysis_response:
             json_text = analysis_response.split("```")[1].split("```")[0].strip()
         else:
-            json_text = analysis_response
+            # Attempt to find JSON at the start of the response
+            # Find the first '[' and the last ']' to extract the JSON array
+            start_idx = analysis_response.find('[')
+            end_idx = analysis_response.rfind(']')
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_text = analysis_response[start_idx:end_idx+1].strip()
+            else:
+                json_text = analysis_response
         
         findings = json.loads(json_text)
         
@@ -141,12 +169,17 @@ def analyze_code(code):
         if not isinstance(findings, list):
             findings = []
             
-        # Ensure each finding has the required fields
+        # Ensure each finding has the required fields and normalize the severity values
         validated_findings = []
         for finding in findings:
+            severity = finding.get("severity", "medium").lower()
+            # Ensure severity is one of the allowed values
+            if severity not in ["critical", "high", "medium", "low"]:
+                severity = "medium"
+                
             validated_findings.append({
                 "title": finding.get("title", "Unnamed Issue"),
-                "severity": finding.get("severity", "medium").lower(),
+                "severity": severity,
                 "description": finding.get("description", "No description provided"),
                 "location": finding.get("location", "Unknown"),
                 "recommendation": finding.get("recommendation", "No recommendation provided")
@@ -155,6 +188,7 @@ def analyze_code(code):
         return validated_findings
     except Exception as e:
         print(f"Error parsing analysis response: {e}")
+        print(f"Raw response: {analysis_response}")
         # Return a default finding if parsing failed
         return [{
             "title": "Analysis Error",
