@@ -53,7 +53,19 @@ fastapi-llm/
    cd fastapi-llm
    ```
 
-2. Install backend dependencies:
+2. Install torch with your CUDA version:
+   ```bash
+   # CUDA 11.8
+    pip install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1  pytorch-cuda=11.8 -c pytorch -c nvidia
+   # CUDA 12.1
+    pip install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+   # CUDA 12.4
+    pip install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 -c pytorch -c nvidia
+   # CUDA 12.6
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+   ```
+
+3. Install backend dependencies:
    ```bash
    pip install -r backend/requirements.txt
    ```
