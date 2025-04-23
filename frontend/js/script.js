@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsSection = document.getElementById('results-section');
     const findingsContainer = document.getElementById('findings-container');
     
+    // Store conversation history
+    let conversationHistory = [];
+    
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
     chatInput.addEventListener('keydown', function(e) {
@@ -29,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
     formatCodeBtn.addEventListener('click', formatCode);
     
     // Functions
-    function sendMessage() {
+    async function sendMessage() {
         const message = chatInput.value.trim();
         if (!message) return;
         
@@ -37,17 +40,59 @@ document.addEventListener('DOMContentLoaded', function() {
         addMessageToChat(message, 'user');
         chatInput.value = '';
         
+        // Store message in conversation history
+        conversationHistory.push({
+            role: 'user',
+            content: message
+        });
+        
         // Show AI is typing
         const typingIndicator = createTypingIndicator();
         chatMessages.appendChild(typingIndicator);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         
-        // Simulate AI response after delay
-        setTimeout(() => {
+        try {
+            // Call the backend API
+            const response = await fetch("http://127.0.0.1:8000/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    message: message,
+                    conversation_history: conversationHistory
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error("Failed to get a response.");
+            }
+            
+            const data = await response.json();
+            
+            // Remove typing indicator
             chatMessages.removeChild(typingIndicator);
-            const response = generateAIResponse(message);
-            addMessageToChat(response, 'ai');
-        }, 1500);
+            
+            // Add AI response to chat
+            addMessageToChat(data.response, 'ai');
+            
+            // Store AI response in conversation history
+            conversationHistory.push({
+                role: 'assistant',
+                content: data.response
+            });
+            
+            // Keep conversation history limited to last 10 messages
+            if (conversationHistory.length > 10) {
+                conversationHistory = conversationHistory.slice(conversationHistory.length - 10);
+            }
+            
+        } catch (error) {
+            // Remove typing indicator
+            chatMessages.removeChild(typingIndicator);
+            
+            // Show error message
+            addMessageToChat("Sorry, I encountered an error while processing your request. Please try again later.", 'ai');
+            console.error("Error:", error);
+        }
     }
     
     function addMessageToChat(message, sender) {
@@ -76,7 +121,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="ml-3 max-w-xs lg:max-w-md">
                     <div class="bg-gray-100 p-3 rounded-lg">
                         <p class="font-medium text-gray-800">CodeGuard AI</p>
-                        <p class="text-gray-700 mt-1">${message}</p>
+                        <p class="text-gray-700 mt-1">${formatMessageWithMarkdown(message)}</p>
                     </div>
                     <div class="mt-1 text-xs text-gray-500">
                         <span>Today at ${timeString}</span>
@@ -87,6 +132,26 @@ document.addEventListener('DOMContentLoaded', function() {
         
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function formatMessageWithMarkdown(message) {
+        // Basic markdown formatting for messages
+        // Replace code blocks
+        message = message.replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-800 text-gray-100 p-2 rounded my-2 overflow-x-auto"><code>$1</code></pre>');
+        
+        // Replace inline code
+        message = message.replace(/`([^`]+)`/g, '<code class="bg-gray-200 text-gray-800 px-1 py-0.5 rounded">$1</code>');
+        
+        // Replace bold text
+        message = message.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        
+        // Replace italic text
+        message = message.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        
+        // Replace line breaks with <br>
+        message = message.replace(/\n/g, '<br>');
+        
+        return message;
     }
     
     function createTypingIndicator() {
@@ -107,19 +172,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         return typingDiv;
-    }
-    
-    function generateAIResponse(message) {
-        // In a real app, this would call an API
-        const responses = [
-            "I've analyzed your code and found several security concerns. Let me explain them in detail...",
-            "That's a great question about security! Here's what you need to know...",
-            "Based on my analysis, your code has potential vulnerabilities that should be addressed...",
-            "I recommend following these security best practices for your situation...",
-            "The code you shared contains patterns that could lead to security issues. Here's how to fix them..."
-        ];
-        
-        return responses[Math.floor(Math.random() * responses.length)];
     }
     
     async function analyzeCode() {
@@ -251,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="bg-gray-50 p-3 rounded-lg">
                             <p class="text-xs font-medium text-gray-800 mb-1">Recommendation:</p>
-                            <p class="text-sm text-gray-700">${finding.recommendation}</p>
+                            <p class="text-sm text-gray-700">${formatMessageWithMarkdown(finding.recommendation)}</p>
                         </div>
                     </div>
                 `;
@@ -272,70 +324,6 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(statusInterval);
             chatMessages.removeChild(analyzingDiv);
         }
-    }
-    
-    function generateMockFindings() {
-        findingsContainer.innerHTML = '';
-        
-        const mockFindings = [
-            {
-                title: "Potential SQL Injection",
-                description: "The code uses string concatenation for SQL queries which could lead to SQL injection vulnerabilities.",
-                severity: "high",
-                location: "Line 42",
-                recommendation: "Use parameterized queries or prepared statements instead of string concatenation."
-            },
-            {
-                title: "Hardcoded Credentials",
-                description: "The code contains hardcoded database credentials which is a security risk.",
-                severity: "medium",
-                location: "Line 15",
-                recommendation: "Store credentials in environment variables or a secure configuration file."
-            },
-            {
-                title: "Missing Input Validation",
-                description: "User input is used directly without proper validation or sanitization.",
-                severity: "medium",
-                location: "Line 28",
-                recommendation: "Implement proper input validation and sanitize all user-provided data."
-            },
-            {
-                title: "Insecure Random Number Generation",
-                description: "The code uses Math.random() for security-sensitive operations which is not cryptographically secure.",
-                severity: "low",
-                location: "Line 67",
-                recommendation: "Use the Web Crypto API for cryptographic operations."
-            }
-        ];
-        
-        mockFindings.forEach(finding => {
-            const findingDiv = document.createElement('div');
-            findingDiv.className = 'border border-gray-200 rounded-lg overflow-hidden';
-            
-            let severityColor = 'bg-blue-100 text-blue-800';
-            if (finding.severity === 'high') severityColor = 'bg-orange-100 text-orange-800';
-            if (finding.severity === 'medium') severityColor = 'bg-yellow-100 text-yellow-800';
-            if (finding.severity === 'critical') severityColor = 'bg-red-100 text-red-800';
-            
-            findingDiv.innerHTML = `
-                <div class="p-3 ${severityColor} flex justify-between items-center">
-                    <h4 class="font-medium">${finding.title}</h4>
-                    <span class="text-xs px-2 py-1 ${severityColor.replace('100', '200')} rounded-full capitalize">${finding.severity}</span>
-                </div>
-                <div class="p-4">
-                    <div class="mb-3">
-                        <p class="text-sm text-gray-700">${finding.description}</p>
-                        <p class="text-xs text-gray-500 mt-1">Location: ${finding.location}</p>
-                    </div>
-                    <div class="bg-gray-50 p-3 rounded-lg">
-                        <p class="text-xs font-medium text-gray-800 mb-1">Recommendation:</p>
-                        <p class="text-sm text-gray-700">${finding.recommendation}</p>
-                    </div>
-                </div>
-            `;
-            
-            findingsContainer.appendChild(findingDiv);
-        });
     }
     
     function clearCode() {
